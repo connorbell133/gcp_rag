@@ -1,0 +1,4 @@
+.env
+google_cloud_credentials.json
+venv/
+venv

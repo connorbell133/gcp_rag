@@ -1,0 +1,71 @@
+Contact Information:
+
+    Name: Connor Bell
+    Email: connor.m.bell13@gmail.com
+    Phone: (425) 219-9902
+    LinkedIn: www.linkedin.com/in/connorbell13
+
+About Me:
+
+    Driven and skilled Software Engineer
+    Passionate about using technical expertise and industry knowledge to create applications and software
+    Focus on Back end Development, cyber threat resilience, and creating production cloud platforms leveraging Data&AI
+
+Education:
+
+    University: Arizona State University
+    Degree: Computer Science | Bachelors
+    GPA: 3.8
+    Years: 2019 - 2023
+    Location: Tempe, AZ
+
+Work Experience:
+
+    Position: AI Engineer
+    Company: Accenture Securty
+    Dates: May 2024 - Active
+    Location: Seattle, WA
+
+    Position: Backend Engineer (Analyst)
+    Company: Avanade
+    Dates: October 2023 - April 2024
+    Location: Seattle, WA
+
+PROJECTS: 
+
+Data Loss Prevention Platform - Accenture:
+
+    Developed an application on Azure Databricks to aggregate and analyze log data from multiple sources
+    Built an ETL platform to consolidate log data into a feature store for ML capabilities
+    Designed Databricks dashboards to track potential security risks and prevent data leaks
+    Platform took 1 day to deploy to production environment and had immediate results
+
+Generative AI Security Application - Accenture:
+
+    Launched a security platform leveraging RAG AI to analyze cyber threats
+    Integrated data from external sources for actionable insights to Security Analysts
+    Acted as lead developer project from initial concept to deployment
+
+Generative AI Security Application - Accenture (Second):
+
+    Launched a security platform leveraging Retrieval-Augmented Generation
+    Provided real-time compliance recommendations and suggested technical for users platforms
+    Developed a real-time Data Pipeline that fed all current third party sources such as NIST, CIS, AWS Best Practices, MITRE recommendations into vector databases
+    Utilized embedding adapter to fine-tune embedding lookup in vector stores
+    Developed complex LLM Response Cache to ensure low latency and cost efficiency
+
+Certifications:
+
+    AZ-900: Azure Fundamentals (Obtained: November 2023)
+    DP-900: Azure Data Fundamentals (Obtained: December 2023)
+    AWS Technical Essentials (Obtained: November 2021)
+
+Skills:
+
+    Languages: Python, Javascript, SQL, C++, HTML5, Script Languages, FastApi + Flask, RAG Applications
+    Platforms: Vector Databases, GenAI Multi-Agent Systems, SIEM/SOAR Applications, Gitlab/Github, Azure / GCP / AWS Suite, Databricks, Snowflake
+
+What I Can Bring Clients:
+
+    Personalized AI Assistants: Experienced in developing and deploying personalized AI assistants to enhance user experiences and streamline processes.
+    AI Automation: Proficient in implementing AI automation solutions to optimize workflows and increase efficiency.
