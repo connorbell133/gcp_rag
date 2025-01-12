@@ -1,4 +1,5 @@
 from typing import List, Dict, Any
+from app.orchestrators.BaseOrchestrator import BaseOrchestrator
 from app.flows.BaseFlow import BaseFlow
 from app.universal_data import (
     validate_and_store_doc_data,
@@ -6,18 +7,8 @@ from app.universal_data import (
 )
 
 
-# === SUBFLOWS ===
+# === SUBFLOWS (unchanged) ===
 class IntroductionFlow(BaseFlow):
-    """
-    This subflow is responsible for collecting the first piece of data required for the document.
-
-    It is the first step in the document creation process.
-
-    Subflow Steps:
-    - Check if all required data has been collected
-    - Collect the first piece of data
-    """
-
     def __init__(
         self,
         doc_metadata: List[Dict[str, Any]],
@@ -28,22 +19,21 @@ class IntroductionFlow(BaseFlow):
 
     def handle_step(self, user_message: str, conversation_id: str):
         questions = self.doc_metadata[:3]
-
         for meta_config in questions:
             key = meta_config["key"]
             doc_state = get_doc_state(conversation_id)
             if key not in doc_state["doc_data"]:
                 result = validate_and_store_doc_data(
-                    doc_state, user_message, meta_config, self.index
+                    doc_state,
+                    user_message,
+                    meta_config,
+                    index=self.index,
                 )
                 if result["result"] == "stored":
-                    # Stored successfully, move on to next item
                     continue
                 elif result["result"] in ("prompt", "error"):
                     return {"message": result["message"], "done": "no"}
 
-        # After you finish storing all required keys for this subflow,
-        # check if you are complete:
         if self.is_complete(conversation_id):
             return {"message": "Introduction done!", "done": "yes"}
         else:
@@ -51,21 +41,10 @@ class IntroductionFlow(BaseFlow):
 
     def is_complete(self, conversation_id: str) -> bool:
         doc_state = get_doc_state(conversation_id)
-        # For the "introduction," we want the first 3 keys (name, favorite_color, email)
         return len(doc_state["doc_data"]) >= 3
 
 
 class MiddleFlow(BaseFlow):
-    """
-    This subflow is responsible for collecting the second piece of data required for the document.
-
-    It is the second step in the document creation process.
-
-    Subflow Steps:
-    - Check if all required data has been collected
-    - Collect the second piece of data
-    """
-
     def __init__(
         self,
         doc_metadata: List[Dict[str, Any]],
@@ -76,13 +55,12 @@ class MiddleFlow(BaseFlow):
 
     def handle_step(self, user_message: str, conversation_id: str):
         questions = self.doc_metadata[3:4]  # Only one question in this flow
-
         for meta_config in questions:
             key = meta_config["key"]
             doc_state = get_doc_state(conversation_id)
             if key not in doc_state["doc_data"]:
                 result = validate_and_store_doc_data(
-                    doc_state, user_message, meta_config, self.index
+                    doc_state, user_message, meta_config, index=self.index
                 )
                 if result["result"] == "stored":
                     continue
@@ -100,16 +78,6 @@ class MiddleFlow(BaseFlow):
 
 
 class EndFlow(BaseFlow):
-    """
-    This subflow is responsible for collecting the last piece of data required for the document.
-
-    It is the third step in the document creation process.
-
-    Subflow Steps:
-    - Check if all required data has been collected
-    - Collect the last piece of data
-    """
-
     def __init__(
         self,
         doc_metadata: List[Dict[str, Any]],
@@ -125,10 +93,7 @@ class EndFlow(BaseFlow):
             doc_state = get_doc_state(conversation_id)
             if key not in doc_state["doc_data"]:
                 result = validate_and_store_doc_data(
-                    doc_state,
-                    user_message,
-                    meta_config,
-                    self.index,
+                    doc_state, user_message, meta_config, index=self.index
                 )
                 if result["result"] == "stored":
                     continue
@@ -141,22 +106,11 @@ class EndFlow(BaseFlow):
             return {"message": "Still missing data for EndFlow.", "done": "no"}
 
     def is_complete(self, conversation_id: str) -> bool:
-
         doc_state = get_doc_state(conversation_id)
         return len(doc_state["doc_data"]) >= 5
 
 
 class GenerateDocument(BaseFlow):
-    """
-    This subflow is responsible for generating the document based on the collected  data.
-
-    It is the final step in the document creation process.
-
-    Subflow Steps:
-    - Check if all required data has been collected
-    - Generate the document
-    """
-
     def __init__(
         self,
         doc_metadata: List[Dict[str, Any]],
@@ -167,36 +121,18 @@ class GenerateDocument(BaseFlow):
 
     def handle_step(self, user_message: str, conversation_id: str):
         doc_state = get_doc_state(conversation_id)
-        # set step complete
         doc_state["doc_data_completed"] = True
 
         if self.is_complete(conversation_id):
-
             return self.generate_document(doc_state["doc_data"])
         else:
             return {"message": "Still missing data for EndFlow.", "done": "no"}
 
     def is_complete(self, conversation_id: str) -> bool:
-
         doc_state = get_doc_state(conversation_id)
         return doc_state["doc_data_completed"]
 
     def generate_document(self, doc_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Generate the document based on the collected data.
-
-        The document will be a string that includes all the collected data.
-
-        Example:
-        === GENERATED DOCUMENT ===
-        Name: John Doe
-        Favorite Color: Blue
-        Email:
-        Hobby: Reading
-
-        === END OF DOCUMENT ===
-
-        """
         doc = (
             "=== GENERATED DOCUMENT ===\n"
             f"Name: {doc_data.get('name', '')}\n"
@@ -212,18 +148,17 @@ class GenerateDocument(BaseFlow):
         }
 
 
-# === MAIN FLOW ===
-class DocumentCreationFlow(BaseFlow):
+# === MAIN FLOW (Orchestrator) ===
+class DocumentCreationFlow(BaseOrchestrator):
     """
-    This flow is responsible for guiding the user through the process of creating a document.
+    Guides the user through creating a document by letting them pick subflows
+    or leave the flow at any time.
 
-    The flow consists of 4 subflows:
-    - IntroductionFlow
-    - MiddleFlow
-    - EndFlow
-    - Generate_Document
-
-    Each subflow is responsible for collecting a subset of the required data.
+    Subflows:
+      - 'introduction'
+      - 'middle'
+      - 'end'
+      - 'generate'
     """
 
     def __init__(self):
@@ -257,46 +192,104 @@ class DocumentCreationFlow(BaseFlow):
             },
         ]
         self.subflows = {
-            "introduction": IntroductionFlow(self.doc_metadata, "doc_creation_flow"),
-            "middle": MiddleFlow(self.doc_metadata, "doc_creation_flow"),
+            "introduction": IntroductionFlow(
+                self.doc_metadata,
+                "doc_creation_orch",
+            ),
+            "middle": MiddleFlow(
+                self.doc_metadata,
+                "doc_creation_orch",
+            ),
             "end": EndFlow(
                 self.doc_metadata,
-                "doc_creation_flow",
+                "doc_creation_orch",
             ),
             "generate": GenerateDocument(
                 self.doc_metadata,
-                "doc_creation_flow",
+                "doc_creation_orch",
             ),
         }
 
-    # ===== BaseFlow Methods =====
-    def is_complete(self, conversation_id: str) -> bool:
+    def orchestrate(self, user_message: str, conversation_id: str) -> Dict[str, Any]:
+        """
+        Allows the user to pick any subflow from 'introduction', 'middle', 'end', 'generate'
+        or to 'leave' the flow at any time. If a subflow is currently in progress,
+        we send user_message to it. Once that subflow's handle_step returns done="yes",
+        we reset the subflow so the user can choose another one.
+        """
+        # Standardize user_message
+        user_message = user_message.strip().lower()
 
-        # Access subtask_data in conversation_state
         doc_state = get_doc_state(conversation_id)
-        return doc_state["doc_data_completed"]
+        current_subflow = doc_state.get(
+            "current_subflow"
+        )  # None or e.g. "introduction"
 
-    def handle_step(self, user_message: str, conversation_id: str):
-        # Grab doc_state
-        doc_state = get_doc_state(conversation_id)
-        current_subflow = doc_state.get("current_subflow", "introduction")
+        # 1) If user wants to leave
+        if user_message == "leave":
+            doc_state["doc_data_completed"] = True
+            doc_state["current_subflow"] = None
+            return {
+                "message": "You have left the document creation flow.",
+                "done": "yes",
+            }
 
-        # Call the active subflow
-        flow_result = self.subflows[current_subflow].handle_step(
-            user_message, conversation_id
-        )
-        if flow_result["done"] == "yes":
-            # Determine the next subflow
-            subflow_keys = list(self.subflows.keys())
-            current_index = subflow_keys.index(current_subflow)
-            if current_index < len(subflow_keys) - 1:
-                doc_state["current_subflow"] = subflow_keys[current_index + 1]
+        # 2) If there's no active subflow, see if user wants to pick one
+        if not current_subflow:
+            # If user typed the name of a subflow, start that subflow
+            if user_message in self.subflows:
+                doc_state["current_subflow"] = user_message
+                return {
+                    "message": f"Starting subflow '{user_message}'. Please proceed.",
+                    "done": "no",
+                }
             else:
-                doc_state["doc_data_completed"] = True
+                # Prompt user to pick from available subflows
+                subflow_list = ", ".join(self.subflows.keys())
+                return {
+                    "message": f"Which subflow would you like to use? "
+                    f"Available: {subflow_list}. Or say 'leave' to exit.",
+                    "done": "no",
+                }
+
+        # 3) We have a current subflow: pass the message to it
+        flow = self.subflows[current_subflow]
+        flow_result = flow.handle_step(user_message, conversation_id)
+
+        # If the subflow is done, reset subflow so user can choose next
+        if flow_result["done"] == "yes":
+            doc_state["current_subflow"] = None
+
+            # If the entire doc data is completed, we can also set doc_data_completed
+            # or just let the user pick subflows again. For example:
+            if self.is_complete(conversation_id):
+                return {
+                    "message": (
+                        f"'{current_subflow}' is complete, and it looks like all data is collected!\n"
+                        "You can say 'generate' to produce the document, or 'leave' to exit."
+                    ),
+                    "done": "no",
+                }
+
+            return {
+                "message": (
+                    f"Subflow '{current_subflow}' is complete. "
+                    f"Pick another subflow or say 'leave' to exit."
+                ),
+                "done": "no",
+            }
 
         return flow_result
 
-    # # ===== Helper Methods =====
+    def is_complete(self, conversation_id: str) -> bool:
+        """
+        Returns True if the doc data is fully completed (and/or the user has
+        indicated it's done). This might mean the user has run 'generate'
+        or otherwise signaled it's done.
+        """
+        doc_state = get_doc_state(conversation_id)
+        return bool(doc_state.get("doc_data_completed", False))
+
     # def get_doc_state(self, conversation_id) -> Dict[str, Any]:
     #     """
     #     Retrieve or create the doc_state from conversation_state.
@@ -305,7 +298,6 @@ class DocumentCreationFlow(BaseFlow):
     #         "document_creation"
     #     )
     #     if not subtask_data:
-    #         # Initialize
     #         convo_state_handler[conversation_id]["subtask_data"][
     #             "document_creation"
     #         ] = {
@@ -314,6 +306,8 @@ class DocumentCreationFlow(BaseFlow):
     #                 "doc_data": {},
     #                 "doc_data_completed": False,
     #                 "last_message_prompt": "",
+    #                 # We'll store the active subflow key here, if any
+    #                 "current_subflow": None,
     #             },
     #         }
     #         subtask_data = convo_state_handler[conversation_id]["subtask_data"][
@@ -322,27 +316,36 @@ class DocumentCreationFlow(BaseFlow):
     #     return subtask_data["data"]
 
     # def validate_and_store_doc_data(
-    #     self, doc_state: Dict[str, Any], user_message: str, meta_config: Dict[str, Any]
+    #     self,
+    #     doc_state: Dict[str, Any],
+    #     user_message: str,
+    #     meta_config: Dict[str, Any],
+    #     index: str,
     # ) -> Dict[str, Any]:
+    #     """
+    #     Attempts to validate and store user_message into doc_state["doc_data"][<key>]
+    #     according to meta_config (prompt, response_type, etc.).
+    #     """
     #     key = meta_config["key"]
     #     last_prompt = doc_state["last_message_prompt"]
     #     response_type = meta_config.get("response_type", "string")
 
+    #     # Only validate if the user is actually responding to the last prompt
     #     if last_prompt == key:
-    #         # Validate input
     #         if response_type == "regex":
     #             pattern = meta_config.get("response_regex", "")
     #             if not re.match(pattern, user_message):
     #                 return {
     #                     "result": "error",
-    #                     "message": f"Invalid format for {key}. Please follow the required format.",
+    #                     "message": f"Invalid format for {key}. Please try again.",
     #                 }
     #         elif response_type == "list":
     #             allowed_values = meta_config.get("response_list", [])
     #             if user_message not in allowed_values:
+    #                 allowed_str = ", ".join(allowed_values)
     #                 return {
     #                     "result": "error",
-    #                     "message": f"Invalid input for {key}. Allowed values: {', '.join(allowed_values)}.",
+    #                     "message": f"Invalid input for {key}. Allowed values: {allowed_str}.",
     #                 }
     #         elif response_type == "string":
     #             if not user_message.strip():
@@ -350,13 +353,12 @@ class DocumentCreationFlow(BaseFlow):
     #                     "result": "error",
     #                     "message": f"Please provide a non-empty value for {key}.",
     #                 }
-
-    #         # If passed validation
-    #         doc_state["doc_data"][key] = user_message
+    #         # If passed validation:
+    #         doc_state[index]["doc_data"][key] = user_message
     #         doc_state["last_message_prompt"] = ""
     #         return {"result": "stored"}
 
-    #     # If we haven't prompted for this key yet
+    #     # If we haven't prompted for this key yet, prompt now
     #     if last_prompt != key:
     #         doc_state["last_message_prompt"] = key
     #         return {"result": "prompt", "message": meta_config["prompt"]}
