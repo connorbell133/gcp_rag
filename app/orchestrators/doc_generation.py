@@ -5,10 +5,21 @@ from app.universal_data import (
     validate_and_store_doc_data,
     get_subtask_state,
 )
+import logging
 
 
-# === SUBFLOWS (unchanged) ===
+# === SUBFLOWS ===
 class IntroductionFlow(BaseFlow):
+    """
+    This subflow is responsible for collecting the first piece of data required for the document.
+
+    It is the first step in the document creation process.
+
+    Subflow Steps:
+    - Check if all required data has been collected
+    - Collect the first piece of data
+    """
+
     def __init__(
         self,
         doc_metadata: List[Dict[str, Any]],
@@ -19,32 +30,54 @@ class IntroductionFlow(BaseFlow):
 
     def handle_step(self, user_message: str, conversation_id: str):
         questions = self.doc_metadata[:3]
+        logging.info("Questions: %s", questions)
         for meta_config in questions:
             key = meta_config["key"]
-            doc_state = get_subtask_state(conversation_id, "document_creation_orch")
-            if key not in doc_state["doc_data"]:
+            logging.info("Intro Key: %s", key)
+            doc_state = get_subtask_state(
+                conversation_id, "document_creation_orchestrator"
+            )
+            logging.info("Doc State: %s", doc_state)
+            if key not in doc_state["data"]["subtask_data"]:
+                logging.info("Key not in subtask data")
+                logging.info("handle_doc_state: %s", doc_state)
+
                 result = validate_and_store_doc_data(
-                    doc_state,
+                    doc_state["data"],
                     user_message,
                     meta_config,
-                    index=self.index,
+                    self.index,
                 )
                 if result["result"] == "stored":
+                    # Stored successfully, move on to next item
                     continue
                 elif result["result"] in ("prompt", "error"):
                     return {"message": result["message"], "done": "no"}
 
+        # After you finish storing all required keys for this subflow,
+        # check if you are complete:
         if self.is_complete(conversation_id):
             return {"message": "Introduction done!", "done": "yes"}
         else:
             return {"message": "Still missing data for IntroductionFlow.", "done": "no"}
 
     def is_complete(self, conversation_id: str) -> bool:
-        doc_state = get_subtask_state(conversation_id, "document_creation_orch")
-        return len(doc_state["doc_data"]) >= 3
+        doc_state = get_subtask_state(conversation_id, "document_creation_orchestrator")
+        # For the "introduction," we want the first 3 keys (name, favorite_color, email)
+        return len(doc_state["data"]["subtask_data"]) >= 3
 
 
 class MiddleFlow(BaseFlow):
+    """
+    This subflow is responsible for collecting the second piece of data required for the document.
+
+    It is the second step in the document creation process.
+
+    Subflow Steps:
+    - Check if all required data has been collected
+    - Collect the second piece of data
+    """
+
     def __init__(
         self,
         doc_metadata: List[Dict[str, Any]],
@@ -55,12 +88,25 @@ class MiddleFlow(BaseFlow):
 
     def handle_step(self, user_message: str, conversation_id: str):
         questions = self.doc_metadata[3:4]  # Only one question in this flow
+        logging.info("Questions: %s", questions)
+
         for meta_config in questions:
             key = meta_config["key"]
-            doc_state = get_subtask_state(conversation_id, "document_creation_orch")
-            if key not in doc_state["doc_data"]:
+            logging.info("Middle Key: %s", key)
+
+            doc_state = get_subtask_state(
+                conversation_id, "document_creation_orchestrator"
+            )
+            logging.info("Doc State: %s", doc_state)
+
+            if key not in doc_state["data"]["subtask_data"]:
+                logging.info("Key not in subtask data")
+                logging.info("handle_doc_state: %s", doc_state)
                 result = validate_and_store_doc_data(
-                    doc_state, user_message, meta_config, index=self.index
+                    doc_state["data"],
+                    user_message,
+                    meta_config,
+                    self.index,
                 )
                 if result["result"] == "stored":
                     continue
@@ -73,11 +119,22 @@ class MiddleFlow(BaseFlow):
             return {"message": "Still missing data for MiddleFlow.", "done": "no"}
 
     def is_complete(self, conversation_id: str) -> bool:
-        doc_state = get_subtask_state(conversation_id, "document_creation_orch")
-        return len(doc_state["doc_data"]) >= 4
+        doc_state = get_subtask_state(conversation_id, "document_creation_orchestrator")
+        # For the "introduction," we want the first 3 keys (name, favorite_color, email)
+        return len(doc_state["data"]["subtask_data"]) >= 4
 
 
 class EndFlow(BaseFlow):
+    """
+    This subflow is responsible for collecting the last piece of data required for the document.
+
+    It is the third step in the document creation process.
+
+    Subflow Steps:
+    - Check if all required data has been collected
+    - Collect the last piece of data
+    """
+
     def __init__(
         self,
         doc_metadata: List[Dict[str, Any]],
@@ -90,12 +147,22 @@ class EndFlow(BaseFlow):
         questions = self.doc_metadata[4:]
         for meta_config in questions:
             key = meta_config["key"]
-            doc_state = get_subtask_state(conversation_id, "document_creation_orch")
-            if key not in doc_state["doc_data"]:
+            logging.info("Intro Key: %s", key)
+            doc_state = get_subtask_state(
+                conversation_id, "document_creation_orchestrator"
+            )
+            logging.info("Doc State: %s", doc_state)
+            if key not in doc_state["data"]["subtask_data"]:
+                logging.info("Key not in subtask data")
+                logging.info("handle_doc_state: %s", doc_state)
                 result = validate_and_store_doc_data(
-                    doc_state, user_message, meta_config, index=self.index
+                    doc_state["data"],
+                    user_message,
+                    meta_config,
+                    self.index,
                 )
                 if result["result"] == "stored":
+                    # Stored successfully, move on to next item
                     continue
                 elif result["result"] in ("prompt", "error"):
                     return {"message": result["message"], "done": "no"}
@@ -106,11 +173,22 @@ class EndFlow(BaseFlow):
             return {"message": "Still missing data for EndFlow.", "done": "no"}
 
     def is_complete(self, conversation_id: str) -> bool:
-        doc_state = get_subtask_state(conversation_id, "document_creation_orch")
-        return len(doc_state["doc_data"]) >= 5
+        doc_state = get_subtask_state(conversation_id, "document_creation_orchestrator")
+        # For the "introduction," we want the first 3 keys (name, favorite_color, email)
+        return len(doc_state["data"]["subtask_data"]) >= 5
 
 
 class GenerateDocument(BaseFlow):
+    """
+    This subflow is responsible for generating the document based on the collected  data.
+
+    It is the final step in the document creation process.
+
+    Subflow Steps:
+    - Check if all required data has been collected
+    - Generate the document
+    """
+
     def __init__(
         self,
         doc_metadata: List[Dict[str, Any]],
@@ -120,19 +198,37 @@ class GenerateDocument(BaseFlow):
         self.index = index
 
     def handle_step(self, user_message: str, conversation_id: str):
-        doc_state = get_subtask_state(conversation_id, "document_creation_orch")
-        doc_state["doc_data_completed"] = True
+        doc_state = get_subtask_state(conversation_id, "document_creation_orchestrator")
+        # set step complete
+        doc_state["data"]["subtask_completed"] = True
 
         if self.is_complete(conversation_id):
-            return self.generate_document(doc_state["doc_data"])
+
+            return self.generate_document(doc_state["data"]["subtask_data"])
         else:
             return {"message": "Still missing data for EndFlow.", "done": "no"}
 
     def is_complete(self, conversation_id: str) -> bool:
-        doc_state = get_subtask_state(conversation_id, "document_creation_orch")
-        return doc_state["doc_data_completed"]
+
+        doc_state = get_subtask_state(conversation_id, "document_creation_orchestrator")
+        return doc_state["data"]["subtask_completed"]
 
     def generate_document(self, doc_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate the document based on the collected data.
+
+        The document will be a string that includes all the collected data.
+
+        Example:
+        === GENERATED DOCUMENT ===
+        Name: John Doe
+        Favorite Color: Blue
+        Email:
+        Hobby: Reading
+
+        === END OF DOCUMENT ===
+
+        """
         doc = (
             "=== GENERATED DOCUMENT ===\n"
             f"Name: {doc_data.get('name', '')}\n"
@@ -194,19 +290,19 @@ class DocumentCreationFlow(BaseOrchestrator):
         self.subflows = {
             "introduction": IntroductionFlow(
                 self.doc_metadata,
-                "doc_creation_orch",
+                "document_creation_orchestrator",
             ),
             "middle": MiddleFlow(
                 self.doc_metadata,
-                "doc_creation_orch",
+                "document_creation_orchestrator",
             ),
             "end": EndFlow(
                 self.doc_metadata,
-                "doc_creation_orch",
+                "document_creation_orchestrator",
             ),
             "generate": GenerateDocument(
                 self.doc_metadata,
-                "doc_creation_orch",
+                "document_creation_orchestrator",
             ),
         }
 
@@ -220,15 +316,16 @@ class DocumentCreationFlow(BaseOrchestrator):
         # Standardize user_message
         user_message = user_message.strip().lower()
 
-        doc_state = get_subtask_state(conversation_id, "document_creation_orch")
-        current_subflow = doc_state.get(
+        doc_state = get_subtask_state(conversation_id, "document_creation_orchestrator")
+        logging.info("Doc State: %s", doc_state)
+        current_subflow = doc_state["data"].get(
             "current_subflow"
         )  # None or e.g. "introduction"
-
+        logging.info("Current Subflow: %s", current_subflow)
         # 1) If user wants to leave
         if user_message == "leave":
-            doc_state["doc_data_completed"] = True
-            doc_state["current_subflow"] = None
+            doc_state["data"]["subtask_completed"] = True
+            doc_state["data"]["current_subflow"] = None
             return {
                 "message": "You have left the document creation flow.",
                 "done": "yes",
@@ -238,7 +335,7 @@ class DocumentCreationFlow(BaseOrchestrator):
         if not current_subflow:
             # If user typed the name of a subflow, start that subflow
             if user_message in self.subflows:
-                doc_state["current_subflow"] = user_message
+                doc_state["data"]["current_subflow"] = user_message
                 return {
                     "message": f"Starting subflow '{user_message}'. Please proceed.",
                     "done": "no",
@@ -258,7 +355,7 @@ class DocumentCreationFlow(BaseOrchestrator):
 
         # If the subflow is done, reset subflow so user can choose next
         if flow_result["done"] == "yes":
-            doc_state["current_subflow"] = None
+            doc_state["data"]["current_subflow"] = None
 
             # If the entire doc data is completed, we can also set doc_data_completed
             # or just let the user pick subflows again. For example:
@@ -287,5 +384,5 @@ class DocumentCreationFlow(BaseOrchestrator):
         indicated it's done). This might mean the user has run 'generate'
         or otherwise signaled it's done.
         """
-        doc_state = get_subtask_state(conversation_id, "document_creation_orch")
+        doc_state = get_subtask_state(conversation_id, "document_creation_orchestrator")
         return bool(doc_state.get("doc_data_completed", False))

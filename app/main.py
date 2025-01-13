@@ -106,16 +106,26 @@ async def post_endpoint(request: Request):
                     flow_result = flow["flow"].handle_step(message, conversation_id)
                 if flow_result:
                     logging.info("Flow result: %s", flow_result)
-                    return {
-                        "message": flow_result["message"],
-                        "done": flow_result["done"],
-                    }
+                    if flow_result["done"] == "yes":
+                        # <-- THIS is where you'd reset the conversation state
+                        conversation_state["current_subtask"] = "none"
+                        conversation_state["subtask_status"] = "none"
+
+                        return {
+                            "message": flow_result["message"],
+                            "done": "yes",
+                        }
+                    else:
+                        return {
+                            "message": flow_result["message"],
+                            "done": flow_result["done"],
+                        }
             else:
                 # Flow is complete, reset for next flow
                 conversation_state["current_subtask"] = "None"
                 conversation_state["subtask_status"] = "none"
                 return {
-                    "message": f"The {current_flow_key} flow is complete. Anything else? If not, say 'none'.",
+                    "message": f"The {current_flow_key} flow is complete",
                     "done": "yes",
                 }
         else:
