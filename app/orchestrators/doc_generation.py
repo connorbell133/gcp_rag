@@ -1,11 +1,22 @@
+"""
+This module contains the orchestrator for the document creation flow.
+
+The flow is broken down into 4 subflows:
+- IntroductionFlow
+- MiddleFlow
+- EndFlow
+- GenerateDocument
+
+"""
+
+import logging
 from typing import List, Dict, Any
 from app.orchestrators.BaseOrchestrator import BaseOrchestrator
-from app.flows.BaseFlow import BaseFlow
+from app.flows.BaseFlow import BaseFlow, gather_store_vars
 from app.universal_data import (
     validate_and_store_doc_data,
     get_subtask_state,
 )
-import logging
 
 
 # === SUBFLOWS ===
@@ -30,36 +41,16 @@ class IntroductionFlow(BaseFlow):
 
     def handle_step(self, user_message: str, conversation_id: str):
         questions = self.doc_metadata[:3]
-        logging.info("Questions: %s", questions)
-        for meta_config in questions:
-            key = meta_config["key"]
-            logging.info("Intro Key: %s", key)
-            doc_state = get_subtask_state(
-                conversation_id, "document_creation_orchestrator"
-            )
-            logging.info("Doc State: %s", doc_state)
-            if key not in doc_state["data"]["subtask_data"]:
-                logging.info("Key not in subtask data")
-                logging.info("handle_doc_state: %s", doc_state)
-
-                result = validate_and_store_doc_data(
-                    doc_state["data"],
-                    user_message,
-                    meta_config,
-                    self.index,
-                )
-                if result["result"] == "stored":
-                    # Stored successfully, move on to next item
-                    continue
-                elif result["result"] in ("prompt", "error"):
-                    return {"message": result["message"], "done": "no"}
-
-        # After you finish storing all required keys for this subflow,
-        # check if you are complete:
-        if self.is_complete(conversation_id):
-            return {"message": "Introduction done!", "done": "yes"}
-        else:
-            return {"message": "Still missing data for IntroductionFlow.", "done": "no"}
+        result = gather_store_vars(
+            questions,
+            conversation_id,
+            user_message,
+            self.index,
+            self.is_complete,
+            get_subtask_state,
+            validate_and_store_doc_data,
+        )
+        return result
 
     def is_complete(self, conversation_id: str) -> bool:
         doc_state = get_subtask_state(conversation_id, "document_creation_orchestrator")
@@ -89,34 +80,16 @@ class MiddleFlow(BaseFlow):
     def handle_step(self, user_message: str, conversation_id: str):
         questions = self.doc_metadata[3:4]  # Only one question in this flow
         logging.info("Questions: %s", questions)
-
-        for meta_config in questions:
-            key = meta_config["key"]
-            logging.info("Middle Key: %s", key)
-
-            doc_state = get_subtask_state(
-                conversation_id, "document_creation_orchestrator"
-            )
-            logging.info("Doc State: %s", doc_state)
-
-            if key not in doc_state["data"]["subtask_data"]:
-                logging.info("Key not in subtask data")
-                logging.info("handle_doc_state: %s", doc_state)
-                result = validate_and_store_doc_data(
-                    doc_state["data"],
-                    user_message,
-                    meta_config,
-                    self.index,
-                )
-                if result["result"] == "stored":
-                    continue
-                elif result["result"] in ("prompt", "error"):
-                    return {"message": result["message"], "done": "no"}
-
-        if self.is_complete(conversation_id):
-            return {"message": "Middle done!", "done": "yes"}
-        else:
-            return {"message": "Still missing data for MiddleFlow.", "done": "no"}
+        result = gather_store_vars(
+            questions,
+            conversation_id,
+            user_message,
+            self.index,
+            self.is_complete,
+            get_subtask_state,
+            validate_and_store_doc_data,
+        )
+        return result
 
     def is_complete(self, conversation_id: str) -> bool:
         doc_state = get_subtask_state(conversation_id, "document_creation_orchestrator")
@@ -145,32 +118,16 @@ class EndFlow(BaseFlow):
 
     def handle_step(self, user_message: str, conversation_id: str):
         questions = self.doc_metadata[4:]
-        for meta_config in questions:
-            key = meta_config["key"]
-            logging.info("Intro Key: %s", key)
-            doc_state = get_subtask_state(
-                conversation_id, "document_creation_orchestrator"
-            )
-            logging.info("Doc State: %s", doc_state)
-            if key not in doc_state["data"]["subtask_data"]:
-                logging.info("Key not in subtask data")
-                logging.info("handle_doc_state: %s", doc_state)
-                result = validate_and_store_doc_data(
-                    doc_state["data"],
-                    user_message,
-                    meta_config,
-                    self.index,
-                )
-                if result["result"] == "stored":
-                    # Stored successfully, move on to next item
-                    continue
-                elif result["result"] in ("prompt", "error"):
-                    return {"message": result["message"], "done": "no"}
-
-        if self.is_complete(conversation_id):
-            return {"message": "Middle done!", "done": "yes"}
-        else:
-            return {"message": "Still missing data for EndFlow.", "done": "no"}
+        result = gather_store_vars(
+            questions,
+            conversation_id,
+            user_message,
+            self.index,
+            self.is_complete,
+            get_subtask_state,
+            validate_and_store_doc_data,
+        )
+        return result
 
     def is_complete(self, conversation_id: str) -> bool:
         doc_state = get_subtask_state(conversation_id, "document_creation_orchestrator")

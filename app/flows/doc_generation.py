@@ -1,10 +1,10 @@
+import logging
 from typing import List, Dict, Any
-from app.flows.BaseFlow import BaseFlow
+from app.flows.BaseFlow import BaseFlow, gather_store_vars
 from app.universal_data import (
     validate_and_store_doc_data,
     get_subtask_state,
 )
-import logging
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -21,6 +21,7 @@ class IntroductionFlow(BaseFlow):
     - Collect the first piece of data
     """
 
+    # --- Subflow Required Methods ---
     def __init__(
         self,
         doc_metadata: List[Dict[str, Any]],
@@ -32,36 +33,19 @@ class IntroductionFlow(BaseFlow):
     def handle_step(self, user_message: str, conversation_id: str):
         questions = self.doc_metadata[:3]
         logging.info("Questions: %s", questions)
-        for meta_config in questions:
-            key = meta_config["key"]
-            logging.info("Intro Key: %s", key)
-            doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
-            logging.info("Doc State: %s", doc_state)
-            if key not in doc_state["data"]["subtask_data"]:
-                logging.info("Key not in subtask data")
-                logging.info("handle_doc_state: %s", doc_state)
-
-                result = validate_and_store_doc_data(
-                    doc_state["data"],
-                    user_message,
-                    meta_config,
-                    self.index,
-                )
-                if result["result"] == "stored":
-                    # Stored successfully, move on to next item
-                    continue
-                elif result["result"] in ("prompt", "error"):
-                    return {"message": result["message"], "done": "no"}
-
-        # After you finish storing all required keys for this subflow,
-        # check if you are complete:
-        if self.is_complete(conversation_id):
-            return {"message": "Introduction done!", "done": "yes"}
-        else:
-            return {"message": "Still missing data for IntroductionFlow.", "done": "no"}
+        result = gather_store_vars(
+            questions,
+            conversation_id,
+            user_message,
+            self.index,
+            self.is_complete,
+            get_subtask_state,
+            validate_and_store_doc_data,
+        )
+        return result
 
     def is_complete(self, conversation_id: str) -> bool:
-        doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
+        doc_state = get_subtask_state(conversation_id, self.index)
         # For the "introduction," we want the first 3 keys (name, favorite_color, email)
         return len(doc_state["data"]["subtask_data"]) >= 3
 
@@ -77,6 +61,7 @@ class MiddleFlow(BaseFlow):
     - Collect the second piece of data
     """
 
+    # --- Subflow Required Methods ---
     def __init__(
         self,
         doc_metadata: List[Dict[str, Any]],
@@ -89,34 +74,19 @@ class MiddleFlow(BaseFlow):
         questions = self.doc_metadata[3:4]  # Only one question in this flow
         logging.info("Questions: %s", questions)
 
-        for meta_config in questions:
-            key = meta_config["key"]
-            logging.info("Middle Key: %s", key)
-
-            doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
-            logging.info("Doc State: %s", doc_state)
-
-            if key not in doc_state["data"]["subtask_data"]:
-                logging.info("Key not in subtask data")
-                logging.info("handle_doc_state: %s", doc_state)
-                result = validate_and_store_doc_data(
-                    doc_state["data"],
-                    user_message,
-                    meta_config,
-                    self.index,
-                )
-                if result["result"] == "stored":
-                    continue
-                elif result["result"] in ("prompt", "error"):
-                    return {"message": result["message"], "done": "no"}
-
-        if self.is_complete(conversation_id):
-            return {"message": "Middle done!", "done": "yes"}
-        else:
-            return {"message": "Still missing data for MiddleFlow.", "done": "no"}
+        result = gather_store_vars(
+            questions,
+            conversation_id,
+            user_message,
+            self.index,
+            self.is_complete,
+            get_subtask_state,
+            validate_and_store_doc_data,
+        )
+        return result
 
     def is_complete(self, conversation_id: str) -> bool:
-        doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
+        doc_state = get_subtask_state(conversation_id, self.index)
         # For the "introduction," we want the first 3 keys (name, favorite_color, email)
         return len(doc_state["data"]["subtask_data"]) >= 4
 
@@ -132,6 +102,7 @@ class EndFlow(BaseFlow):
     - Collect the last piece of data
     """
 
+    # --- Subflow Required Methods ---
     def __init__(
         self,
         doc_metadata: List[Dict[str, Any]],
@@ -142,33 +113,19 @@ class EndFlow(BaseFlow):
 
     def handle_step(self, user_message: str, conversation_id: str):
         questions = self.doc_metadata[4:]
-        for meta_config in questions:
-            key = meta_config["key"]
-            logging.info("Intro Key: %s", key)
-            doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
-            logging.info("Doc State: %s", doc_state)
-            if key not in doc_state["data"]["subtask_data"]:
-                logging.info("Key not in subtask data")
-                logging.info("handle_doc_state: %s", doc_state)
-                result = validate_and_store_doc_data(
-                    doc_state["data"],
-                    user_message,
-                    meta_config,
-                    self.index,
-                )
-                if result["result"] == "stored":
-                    # Stored successfully, move on to next item
-                    continue
-                elif result["result"] in ("prompt", "error"):
-                    return {"message": result["message"], "done": "no"}
-
-        if self.is_complete(conversation_id):
-            return {"message": "Middle done!", "done": "yes"}
-        else:
-            return {"message": "Still missing data for EndFlow.", "done": "no"}
+        result = gather_store_vars(
+            questions,
+            conversation_id,
+            user_message,
+            self.index,
+            self.is_complete,
+            get_subtask_state,
+            validate_and_store_doc_data,
+        )
+        return result
 
     def is_complete(self, conversation_id: str) -> bool:
-        doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
+        doc_state = get_subtask_state(conversation_id, self.index)
         # For the "introduction," we want the first 3 keys (name, favorite_color, email)
         return len(doc_state["data"]["subtask_data"]) >= 5
 
@@ -184,6 +141,7 @@ class GenerateDocument(BaseFlow):
     - Generate the document
     """
 
+    # --- Subflow Required Methods ---
     def __init__(
         self,
         doc_metadata: List[Dict[str, Any]],
@@ -193,7 +151,7 @@ class GenerateDocument(BaseFlow):
         self.index = index
 
     def handle_step(self, user_message: str, conversation_id: str):
-        doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
+        doc_state = get_subtask_state(conversation_id, self.index)
         # set step complete
         doc_state["data"]["subtask_completed"] = True
 
@@ -205,9 +163,10 @@ class GenerateDocument(BaseFlow):
 
     def is_complete(self, conversation_id: str) -> bool:
 
-        doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
+        doc_state = get_subtask_state(conversation_id, self.index)
         return doc_state["data"]["subtask_completed"]
 
+    # --- Subflow Helper Methods ---
     def generate_document(self, doc_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Generate the document based on the collected data.
@@ -254,6 +213,7 @@ class DocumentCreationFlow(BaseFlow):
     """
 
     def __init__(self):
+        self.flow_name = "doc_creation_flow"
         self.doc_metadata = [
             {
                 "key": "name",
@@ -284,15 +244,15 @@ class DocumentCreationFlow(BaseFlow):
             },
         ]
         self.subflows = {
-            "introduction": IntroductionFlow(self.doc_metadata, "doc_creation_flow"),
-            "middle": MiddleFlow(self.doc_metadata, "doc_creation_flow"),
+            "introduction": IntroductionFlow(self.doc_metadata, self.flow_name),
+            "middle": MiddleFlow(self.doc_metadata, self.flow_name),
             "end": EndFlow(
                 self.doc_metadata,
-                "doc_creation_flow",
+                self.flow_name,
             ),
             "generate": GenerateDocument(
                 self.doc_metadata,
-                "doc_creation_flow",
+                self.flow_name,
             ),
         }
 
@@ -300,13 +260,13 @@ class DocumentCreationFlow(BaseFlow):
     def is_complete(self, conversation_id: str) -> bool:
 
         # Access subtask_data in conversation_state
-        doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
+        doc_state = get_subtask_state(conversation_id, self.flow_name)
         return doc_state["data"]["subtask_completed"]
 
     def handle_step(self, user_message: str, conversation_id: str):
 
         logging.info("Handling step for document creation flow")
-        subtask_state = get_subtask_state(conversation_id, "doc_creation_flow")
+        subtask_state = get_subtask_state(conversation_id, self.flow_name)
         logging.info("Subtask state: %s", subtask_state)
         current_subflow = subtask_state["data"].get("current_subflow") or "introduction"
 
