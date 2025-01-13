@@ -2,8 +2,11 @@ from typing import List, Dict, Any
 from app.flows.BaseFlow import BaseFlow
 from app.universal_data import (
     validate_and_store_doc_data,
-    get_doc_state,
+    get_subtask_state,
 )
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 # === SUBFLOWS ===
@@ -28,13 +31,21 @@ class IntroductionFlow(BaseFlow):
 
     def handle_step(self, user_message: str, conversation_id: str):
         questions = self.doc_metadata[:3]
-
+        logging.info("Questions: %s", questions)
         for meta_config in questions:
             key = meta_config["key"]
-            doc_state = get_doc_state(conversation_id)
-            if key not in doc_state["doc_data"]:
+            logging.info("Intro Key: %s", key)
+            doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
+            logging.info("Doc State: %s", doc_state)
+            if key not in doc_state["data"]["subtask_data"]:
+                logging.info("Key not in subtask data")
+                logging.info("handle_doc_state: %s", doc_state)
+
                 result = validate_and_store_doc_data(
-                    doc_state, user_message, meta_config, self.index
+                    doc_state["data"],
+                    user_message,
+                    meta_config,
+                    self.index,
                 )
                 if result["result"] == "stored":
                     # Stored successfully, move on to next item
@@ -50,9 +61,9 @@ class IntroductionFlow(BaseFlow):
             return {"message": "Still missing data for IntroductionFlow.", "done": "no"}
 
     def is_complete(self, conversation_id: str) -> bool:
-        doc_state = get_doc_state(conversation_id)
+        doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
         # For the "introduction," we want the first 3 keys (name, favorite_color, email)
-        return len(doc_state["doc_data"]) >= 3
+        return len(doc_state["data"]["subtask_data"]) >= 3
 
 
 class MiddleFlow(BaseFlow):
@@ -76,13 +87,23 @@ class MiddleFlow(BaseFlow):
 
     def handle_step(self, user_message: str, conversation_id: str):
         questions = self.doc_metadata[3:4]  # Only one question in this flow
+        logging.info("Questions: %s", questions)
 
         for meta_config in questions:
             key = meta_config["key"]
-            doc_state = get_doc_state(conversation_id)
-            if key not in doc_state["doc_data"]:
+            logging.info("Middle Key: %s", key)
+
+            doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
+            logging.info("Doc State: %s", doc_state)
+
+            if key not in doc_state["data"]["subtask_data"]:
+                logging.info("Key not in subtask data")
+                logging.info("handle_doc_state: %s", doc_state)
                 result = validate_and_store_doc_data(
-                    doc_state, user_message, meta_config, self.index
+                    doc_state["data"],
+                    user_message,
+                    meta_config,
+                    self.index,
                 )
                 if result["result"] == "stored":
                     continue
@@ -95,8 +116,9 @@ class MiddleFlow(BaseFlow):
             return {"message": "Still missing data for MiddleFlow.", "done": "no"}
 
     def is_complete(self, conversation_id: str) -> bool:
-        doc_state = get_doc_state(conversation_id)
-        return len(doc_state["doc_data"]) >= 4
+        doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
+        # For the "introduction," we want the first 3 keys (name, favorite_color, email)
+        return len(doc_state["data"]["subtask_data"]) >= 4
 
 
 class EndFlow(BaseFlow):
@@ -122,15 +144,20 @@ class EndFlow(BaseFlow):
         questions = self.doc_metadata[4:]
         for meta_config in questions:
             key = meta_config["key"]
-            doc_state = get_doc_state(conversation_id)
-            if key not in doc_state["doc_data"]:
+            logging.info("Intro Key: %s", key)
+            doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
+            logging.info("Doc State: %s", doc_state)
+            if key not in doc_state["data"]["subtask_data"]:
+                logging.info("Key not in subtask data")
+                logging.info("handle_doc_state: %s", doc_state)
                 result = validate_and_store_doc_data(
-                    doc_state,
+                    doc_state["data"],
                     user_message,
                     meta_config,
                     self.index,
                 )
                 if result["result"] == "stored":
+                    # Stored successfully, move on to next item
                     continue
                 elif result["result"] in ("prompt", "error"):
                     return {"message": result["message"], "done": "no"}
@@ -141,9 +168,9 @@ class EndFlow(BaseFlow):
             return {"message": "Still missing data for EndFlow.", "done": "no"}
 
     def is_complete(self, conversation_id: str) -> bool:
-
-        doc_state = get_doc_state(conversation_id)
-        return len(doc_state["doc_data"]) >= 5
+        doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
+        # For the "introduction," we want the first 3 keys (name, favorite_color, email)
+        return len(doc_state["data"]["subtask_data"]) >= 5
 
 
 class GenerateDocument(BaseFlow):
@@ -166,20 +193,20 @@ class GenerateDocument(BaseFlow):
         self.index = index
 
     def handle_step(self, user_message: str, conversation_id: str):
-        doc_state = get_doc_state(conversation_id)
+        doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
         # set step complete
-        doc_state["doc_data_completed"] = True
+        doc_state["data"]["subtask_completed"] = True
 
         if self.is_complete(conversation_id):
 
-            return self.generate_document(doc_state["doc_data"])
+            return self.generate_document(doc_state["data"]["subtask_data"])
         else:
             return {"message": "Still missing data for EndFlow.", "done": "no"}
 
     def is_complete(self, conversation_id: str) -> bool:
 
-        doc_state = get_doc_state(conversation_id)
-        return doc_state["doc_data_completed"]
+        doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
+        return doc_state["data"]["subtask_completed"]
 
     def generate_document(self, doc_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -273,93 +300,35 @@ class DocumentCreationFlow(BaseFlow):
     def is_complete(self, conversation_id: str) -> bool:
 
         # Access subtask_data in conversation_state
-        doc_state = get_doc_state(conversation_id)
-        return doc_state["doc_data_completed"]
+        doc_state = get_subtask_state(conversation_id, "doc_creation_flow")
+        return doc_state["data"]["subtask_completed"]
 
     def handle_step(self, user_message: str, conversation_id: str):
-        # Grab doc_state
-        doc_state = get_doc_state(conversation_id)
-        current_subflow = doc_state.get("current_subflow", "introduction")
+
+        logging.info("Handling step for document creation flow")
+        subtask_state = get_subtask_state(conversation_id, "doc_creation_flow")
+        logging.info("Subtask state: %s", subtask_state)
+        current_subflow = subtask_state["data"].get("current_subflow") or "introduction"
 
         # Call the active subflow
+        logging.info("Current subflow: %s", current_subflow)
+        logging.info("Doc state: %s", subtask_state)
+        logging.info("User message: %s", user_message)
+        logging.info("Subflows: %s", self.subflows)
         flow_result = self.subflows[current_subflow].handle_step(
             user_message, conversation_id
         )
         if flow_result["done"] == "yes":
+            logging.info("Subflow done")
             # Determine the next subflow
             subflow_keys = list(self.subflows.keys())
             current_index = subflow_keys.index(current_subflow)
             if current_index < len(subflow_keys) - 1:
-                doc_state["current_subflow"] = subflow_keys[current_index + 1]
+                logging.info("Moving to next subflow")
+                subtask_state["data"]["current_subflow"] = subflow_keys[
+                    current_index + 1
+                ]
             else:
-                doc_state["doc_data_completed"] = True
-
+                subtask_state["data"]["subtask_completed"] = True
+                logging.info("All subflows complete")
         return flow_result
-
-    # # ===== Helper Methods =====
-    # def get_doc_state(self, conversation_id) -> Dict[str, Any]:
-    #     """
-    #     Retrieve or create the doc_state from conversation_state.
-    #     """
-    #     subtask_data = convo_state_handler[conversation_id]["subtask_data"].get(
-    #         "document_creation"
-    #     )
-    #     if not subtask_data:
-    #         # Initialize
-    #         convo_state_handler[conversation_id]["subtask_data"][
-    #             "document_creation"
-    #         ] = {
-    #             "status": "in_progress",
-    #             "data": {
-    #                 "doc_data": {},
-    #                 "doc_data_completed": False,
-    #                 "last_message_prompt": "",
-    #             },
-    #         }
-    #         subtask_data = convo_state_handler[conversation_id]["subtask_data"][
-    #             "document_creation"
-    #         ]
-    #     return subtask_data["data"]
-
-    # def validate_and_store_doc_data(
-    #     self, doc_state: Dict[str, Any], user_message: str, meta_config: Dict[str, Any]
-    # ) -> Dict[str, Any]:
-    #     key = meta_config["key"]
-    #     last_prompt = doc_state["last_message_prompt"]
-    #     response_type = meta_config.get("response_type", "string")
-
-    #     if last_prompt == key:
-    #         # Validate input
-    #         if response_type == "regex":
-    #             pattern = meta_config.get("response_regex", "")
-    #             if not re.match(pattern, user_message):
-    #                 return {
-    #                     "result": "error",
-    #                     "message": f"Invalid format for {key}. Please follow the required format.",
-    #                 }
-    #         elif response_type == "list":
-    #             allowed_values = meta_config.get("response_list", [])
-    #             if user_message not in allowed_values:
-    #                 return {
-    #                     "result": "error",
-    #                     "message": f"Invalid input for {key}. Allowed values: {', '.join(allowed_values)}.",
-    #                 }
-    #         elif response_type == "string":
-    #             if not user_message.strip():
-    #                 return {
-    #                     "result": "error",
-    #                     "message": f"Please provide a non-empty value for {key}.",
-    #                 }
-
-    #         # If passed validation
-    #         doc_state["doc_data"][key] = user_message
-    #         doc_state["last_message_prompt"] = ""
-    #         return {"result": "stored"}
-
-    #     # If we haven't prompted for this key yet
-    #     if last_prompt != key:
-    #         doc_state["last_message_prompt"] = key
-    #         return {"result": "prompt", "message": meta_config["prompt"]}
-
-    #     # Fallback
-    #     return {"result": "error", "message": "An unexpected error occurred."}

@@ -28,6 +28,8 @@ metadata_config = MetaDataConfig()
 
 @app.post("/response")
 async def post_endpoint(request: Request):
+
+    # 0) Parse incoming message
     data = await request.json()
     conversation_id = data["conversation_id"]
     message = data["message"]
@@ -42,29 +44,32 @@ async def post_endpoint(request: Request):
     logging.info("Current conversation state: %s", conversation_state)
 
     # 2) If base metadata isn't set, handle that first
-    if not conversation_state["base_metadata_set"]:
-        result = metadata_config.handle_base_metadata(conversation_state, message)
+    # if not conversation_state["base_metadata_set"]:
+    #     result = metadata_config.handle_base_metadata(conversation_state, message)
 
-        if isinstance(result, dict):
-            # Returning a dict with a "message"
-            return {"message": result["message"], "done": "yes"}
-        elif isinstance(result, str):
-            # Returning a string prompt
-            return {"message": result, "done": "yes"}
-        else:
-            # Base metadata is fully collected
-            conversation_state["base_metadata_set"] = True
-            conversation_state["current_subtask"] = "None"
-            conversation_state["subtask_status"] = "none"
-            valid_flows = "', '".join(flows_registry.keys())
+    #     if isinstance(result, dict):
+    #         # Returning a dict with a "message"
+    #         return {"message": result["message"], "done": "yes"}
+    #     elif isinstance(result, str):
+    #         # Returning a string prompt
+    #         return {"message": result, "done": "yes"}
+    #     else:
+    #         # Base metadata is fully collected
+    #         conversation_state["base_metadata_set"] = True
+    #         conversation_state["current_subtask"] = "None"
+    #         conversation_state["subtask_status"] = "none"
+    #         valid_flows = "', '".join(flows_registry.keys())
 
-            return {
-                "message": f"Base metadata is set! Which flow would you like to start? Available flows: '{valid_flows}'",
-                "done": "no",
-            }
+    #         return {
+    #             "message": f"Base metadata is set! Which flow would you like to start? Available flows: '{valid_flows}'",
+    #             "done": "no",
+    #         }
+    # logging.info("Base metadata is set")
 
+    logging.info("Current conversation state: %s", conversation_state)
     # 3) Base metadata is set: either pick a flow or continue the current one
-    if conversation_state["current_subtask"] == "None":
+    if conversation_state["current_subtask"] == "none":
+        logging.info("User hasn't picked a flow yet")
         # User hasn't picked a flow yet
         chosen_flow = message.strip().lower()
         if chosen_flow != "none":
@@ -84,15 +89,23 @@ async def post_endpoint(request: Request):
     else:
         # User has a flow in progress
         current_flow_key = conversation_state["current_subtask"]
+
+        # Check if the flow is in the registry
         if current_flow_key in flows_registry:
             flow = flows_registry[current_flow_key]
-
+            logging.info("Handling flow: %s", current_flow_key)
+            # Check if the flow is complete
             if not flow["flow"].is_complete(conversation_id):
+                logging.info("Flow is not complete")
+                # Handle orchestrator flows differently
                 if flow["type"] == "orchestrator":
+                    logging.info("Handling orchestrator flow")
                     flow_result = flow["flow"].orchestrate(message, conversation_id)
                 else:
+                    logging.info("Handling regular flow for message: %s", message)
                     flow_result = flow["flow"].handle_step(message, conversation_id)
                 if flow_result:
+                    logging.info("Flow result: %s", flow_result)
                     return {
                         "message": flow_result["message"],
                         "done": flow_result["done"],

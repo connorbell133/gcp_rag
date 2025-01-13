@@ -53,32 +53,45 @@ provider_metadata = [
 # === MAIN ===
 
 
-def get_doc_state(conversation_id) -> Dict[str, Any]:
+def get_subtask_state(conversation_id, subtask: str) -> Subtask:
     """
     Retrieve or create the doc_state from conversation_state.
     """
-    subtask_data = convo_state_handler[conversation_id]["subtask_data"].get(
-        "document_creation"
+    logging.info(
+        "Retrieving subtask state for conversation_id '%s' and subtask '%s'",
+        conversation_id,
+        subtask,
     )
+
+    subtask_data = convo_state_handler[conversation_id]["subtask_data"].get(
+        subtask, None
+    )
+
+    logging.info("Subtask data: %s", subtask_data)
     if not subtask_data:
-        convo_state_handler[conversation_id]["subtask_data"]["document_creation"] = {
+        logging.info("Creating new subtask data for subtask '%s'", subtask)
+
+        convo_state_handler[conversation_id]["subtask_data"][subtask] = {
             "status": "in_progress",
             "data": {
-                "doc_data": {},
-                "doc_data_completed": False,
+                "subtask_data": {},
+                "subtask_completed": False,
                 "last_message_prompt": "",
                 # We'll store the active subflow key here, if any
                 "current_subflow": None,
             },
         }
-        subtask_data = convo_state_handler[conversation_id]["subtask_data"][
-            "document_creation"
-        ]
-    return subtask_data["data"]
+        subtask_data = convo_state_handler[conversation_id]["subtask_data"][subtask]
+        logging.info(
+            "Updated Conversation State: %s", convo_state_handler[conversation_id]
+        )
+        return subtask_data
+
+    return subtask_data
 
 
 def validate_and_store_doc_data(
-    doc_state: Dict[str, Any],
+    subtask_state: Dict[str, Any],
     user_message: str,
     meta_config: Dict[str, Any],
     index: str,
@@ -88,7 +101,13 @@ def validate_and_store_doc_data(
     according to meta_config (prompt, response_type, etc.).
     """
     key = meta_config["key"]
-    last_prompt = doc_state["last_message_prompt"]
+    logging.info(
+        "Validating and storing user message '%s' for key '%s'", user_message, key
+    )
+    logging.info("Subtask state: %s", subtask_state)
+    logging.info("index config: %s", index)
+
+    last_prompt = subtask_state["last_message_prompt"]
     response_type = meta_config.get("response_type", "string")
 
     # Only validate if the user is actually responding to the last prompt
@@ -115,13 +134,15 @@ def validate_and_store_doc_data(
                     "message": f"Please provide a non-empty value for {key}.",
                 }
         # If passed validation:
-        doc_state[index]["doc_data"][key] = user_message
-        doc_state["last_message_prompt"] = ""
+        logging.info("Storing user message '%s' for key '%s'", user_message, key)
+        logging.info("subtask_state: %s", subtask_state)
+        subtask_state["subtask_data"][key] = user_message
+        subtask_state["last_message_prompt"] = ""
         return {"result": "stored"}
 
     # If we haven't prompted for this key yet, prompt now
     if last_prompt != key:
-        doc_state["last_message_prompt"] = key
+        subtask_state["last_message_prompt"] = key
         return {"result": "prompt", "message": meta_config["prompt"]}
 
     # Fallback

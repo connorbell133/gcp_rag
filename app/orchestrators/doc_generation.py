@@ -3,7 +3,7 @@ from app.orchestrators.BaseOrchestrator import BaseOrchestrator
 from app.flows.BaseFlow import BaseFlow
 from app.universal_data import (
     validate_and_store_doc_data,
-    get_doc_state,
+    get_subtask_state,
 )
 
 
@@ -21,7 +21,7 @@ class IntroductionFlow(BaseFlow):
         questions = self.doc_metadata[:3]
         for meta_config in questions:
             key = meta_config["key"]
-            doc_state = get_doc_state(conversation_id)
+            doc_state = get_subtask_state(conversation_id, "document_creation_orch")
             if key not in doc_state["doc_data"]:
                 result = validate_and_store_doc_data(
                     doc_state,
@@ -40,7 +40,7 @@ class IntroductionFlow(BaseFlow):
             return {"message": "Still missing data for IntroductionFlow.", "done": "no"}
 
     def is_complete(self, conversation_id: str) -> bool:
-        doc_state = get_doc_state(conversation_id)
+        doc_state = get_subtask_state(conversation_id, "document_creation_orch")
         return len(doc_state["doc_data"]) >= 3
 
 
@@ -57,7 +57,7 @@ class MiddleFlow(BaseFlow):
         questions = self.doc_metadata[3:4]  # Only one question in this flow
         for meta_config in questions:
             key = meta_config["key"]
-            doc_state = get_doc_state(conversation_id)
+            doc_state = get_subtask_state(conversation_id, "document_creation_orch")
             if key not in doc_state["doc_data"]:
                 result = validate_and_store_doc_data(
                     doc_state, user_message, meta_config, index=self.index
@@ -73,7 +73,7 @@ class MiddleFlow(BaseFlow):
             return {"message": "Still missing data for MiddleFlow.", "done": "no"}
 
     def is_complete(self, conversation_id: str) -> bool:
-        doc_state = get_doc_state(conversation_id)
+        doc_state = get_subtask_state(conversation_id, "document_creation_orch")
         return len(doc_state["doc_data"]) >= 4
 
 
@@ -90,7 +90,7 @@ class EndFlow(BaseFlow):
         questions = self.doc_metadata[4:]
         for meta_config in questions:
             key = meta_config["key"]
-            doc_state = get_doc_state(conversation_id)
+            doc_state = get_subtask_state(conversation_id, "document_creation_orch")
             if key not in doc_state["doc_data"]:
                 result = validate_and_store_doc_data(
                     doc_state, user_message, meta_config, index=self.index
@@ -106,7 +106,7 @@ class EndFlow(BaseFlow):
             return {"message": "Still missing data for EndFlow.", "done": "no"}
 
     def is_complete(self, conversation_id: str) -> bool:
-        doc_state = get_doc_state(conversation_id)
+        doc_state = get_subtask_state(conversation_id, "document_creation_orch")
         return len(doc_state["doc_data"]) >= 5
 
 
@@ -120,7 +120,7 @@ class GenerateDocument(BaseFlow):
         self.index = index
 
     def handle_step(self, user_message: str, conversation_id: str):
-        doc_state = get_doc_state(conversation_id)
+        doc_state = get_subtask_state(conversation_id, "document_creation_orch")
         doc_state["doc_data_completed"] = True
 
         if self.is_complete(conversation_id):
@@ -129,7 +129,7 @@ class GenerateDocument(BaseFlow):
             return {"message": "Still missing data for EndFlow.", "done": "no"}
 
     def is_complete(self, conversation_id: str) -> bool:
-        doc_state = get_doc_state(conversation_id)
+        doc_state = get_subtask_state(conversation_id, "document_creation_orch")
         return doc_state["doc_data_completed"]
 
     def generate_document(self, doc_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -220,7 +220,7 @@ class DocumentCreationFlow(BaseOrchestrator):
         # Standardize user_message
         user_message = user_message.strip().lower()
 
-        doc_state = get_doc_state(conversation_id)
+        doc_state = get_subtask_state(conversation_id, "document_creation_orch")
         current_subflow = doc_state.get(
             "current_subflow"
         )  # None or e.g. "introduction"
@@ -287,81 +287,5 @@ class DocumentCreationFlow(BaseOrchestrator):
         indicated it's done). This might mean the user has run 'generate'
         or otherwise signaled it's done.
         """
-        doc_state = get_doc_state(conversation_id)
+        doc_state = get_subtask_state(conversation_id, "document_creation_orch")
         return bool(doc_state.get("doc_data_completed", False))
-
-    # def get_doc_state(self, conversation_id) -> Dict[str, Any]:
-    #     """
-    #     Retrieve or create the doc_state from conversation_state.
-    #     """
-    #     subtask_data = convo_state_handler[conversation_id]["subtask_data"].get(
-    #         "document_creation"
-    #     )
-    #     if not subtask_data:
-    #         convo_state_handler[conversation_id]["subtask_data"][
-    #             "document_creation"
-    #         ] = {
-    #             "status": "in_progress",
-    #             "data": {
-    #                 "doc_data": {},
-    #                 "doc_data_completed": False,
-    #                 "last_message_prompt": "",
-    #                 # We'll store the active subflow key here, if any
-    #                 "current_subflow": None,
-    #             },
-    #         }
-    #         subtask_data = convo_state_handler[conversation_id]["subtask_data"][
-    #             "document_creation"
-    #         ]
-    #     return subtask_data["data"]
-
-    # def validate_and_store_doc_data(
-    #     self,
-    #     doc_state: Dict[str, Any],
-    #     user_message: str,
-    #     meta_config: Dict[str, Any],
-    #     index: str,
-    # ) -> Dict[str, Any]:
-    #     """
-    #     Attempts to validate and store user_message into doc_state["doc_data"][<key>]
-    #     according to meta_config (prompt, response_type, etc.).
-    #     """
-    #     key = meta_config["key"]
-    #     last_prompt = doc_state["last_message_prompt"]
-    #     response_type = meta_config.get("response_type", "string")
-
-    #     # Only validate if the user is actually responding to the last prompt
-    #     if last_prompt == key:
-    #         if response_type == "regex":
-    #             pattern = meta_config.get("response_regex", "")
-    #             if not re.match(pattern, user_message):
-    #                 return {
-    #                     "result": "error",
-    #                     "message": f"Invalid format for {key}. Please try again.",
-    #                 }
-    #         elif response_type == "list":
-    #             allowed_values = meta_config.get("response_list", [])
-    #             if user_message not in allowed_values:
-    #                 allowed_str = ", ".join(allowed_values)
-    #                 return {
-    #                     "result": "error",
-    #                     "message": f"Invalid input for {key}. Allowed values: {allowed_str}.",
-    #                 }
-    #         elif response_type == "string":
-    #             if not user_message.strip():
-    #                 return {
-    #                     "result": "error",
-    #                     "message": f"Please provide a non-empty value for {key}.",
-    #                 }
-    #         # If passed validation:
-    #         doc_state[index]["doc_data"][key] = user_message
-    #         doc_state["last_message_prompt"] = ""
-    #         return {"result": "stored"}
-
-    #     # If we haven't prompted for this key yet, prompt now
-    #     if last_prompt != key:
-    #         doc_state["last_message_prompt"] = key
-    #         return {"result": "prompt", "message": meta_config["prompt"]}
-
-    #     # Fallback
-    #     return {"result": "error", "message": "An unexpected error occurred."}
