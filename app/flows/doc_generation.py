@@ -45,9 +45,14 @@ class IntroductionFlow(BaseFlow):
         return result
 
     def is_complete(self, conversation_id: str) -> bool:
+
+        # Access subtask_data in conversation_state
         doc_state = get_subtask_state(conversation_id, self.index)
-        # For the "introduction," we want the first 3 keys (name, favorite_color, email)
-        return len(doc_state["data"]["subtask_data"]) >= 3
+
+        # define the condition for the subflow to be complete
+        condition = len(doc_state["data"]["subtask_data"]) >= 3
+
+        return condition
 
 
 class MiddleFlow(BaseFlow):
@@ -86,9 +91,14 @@ class MiddleFlow(BaseFlow):
         return result
 
     def is_complete(self, conversation_id: str) -> bool:
+
+        # Access subtask_data in conversation_state
         doc_state = get_subtask_state(conversation_id, self.index)
-        # For the "introduction," we want the first 3 keys (name, favorite_color, email)
-        return len(doc_state["data"]["subtask_data"]) >= 4
+
+        # define the condition for the subflow to be complete
+        condition = len(doc_state["data"]["subtask_data"]) >= 4
+
+        return condition
 
 
 class EndFlow(BaseFlow):
@@ -125,9 +135,14 @@ class EndFlow(BaseFlow):
         return result
 
     def is_complete(self, conversation_id: str) -> bool:
+
+        # Access subtask_data in conversation_state
         doc_state = get_subtask_state(conversation_id, self.index)
-        # For the "introduction," we want the first 3 keys (name, favorite_color, email)
-        return len(doc_state["data"]["subtask_data"]) >= 5
+
+        # define the condition for the subflow to be complete
+        condition = len(doc_state["data"]["subtask_data"]) >= 5
+
+        return condition
 
 
 class GenerateDocument(BaseFlow):
@@ -163,8 +178,13 @@ class GenerateDocument(BaseFlow):
 
     def is_complete(self, conversation_id: str) -> bool:
 
+        # Access subtask_data in conversation_state
         doc_state = get_subtask_state(conversation_id, self.index)
-        return doc_state["data"]["subtask_completed"]
+
+        # define the condition for the subflow to be complete
+        condition = doc_state["data"]["subtask_completed"]
+
+        return condition
 
     # --- Subflow Helper Methods ---
     def generate_document(self, doc_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -257,38 +277,48 @@ class DocumentCreationFlow(BaseFlow):
         }
 
     # ===== BaseFlow Methods =====
-    def is_complete(self, conversation_id: str) -> bool:
-
-        # Access subtask_data in conversation_state
-        doc_state = get_subtask_state(conversation_id, self.flow_name)
-        return doc_state["data"]["subtask_completed"]
 
     def handle_step(self, user_message: str, conversation_id: str):
 
-        logging.info("Handling step for document creation flow")
+        # Access subtask_data in conversation_state
         subtask_state = get_subtask_state(conversation_id, self.flow_name)
-        logging.info("Subtask state: %s", subtask_state)
+
+        # Check if the subtask is already completed
         current_subflow = subtask_state["data"].get("current_subflow") or "introduction"
 
         # Call the active subflow
-        logging.info("Current subflow: %s", current_subflow)
-        logging.info("Doc state: %s", subtask_state)
-        logging.info("User message: %s", user_message)
-        logging.info("Subflows: %s", self.subflows)
         flow_result = self.subflows[current_subflow].handle_step(
             user_message, conversation_id
         )
+
+        # Check if the subflow is done
         if flow_result["done"] == "yes":
             logging.info("Subflow done")
+
             # Determine the next subflow
             subflow_keys = list(self.subflows.keys())
             current_index = subflow_keys.index(current_subflow)
+
+            # Check if the current subflow is the last subflow
             if current_index < len(subflow_keys) - 1:
                 logging.info("Moving to next subflow")
                 subtask_state["data"]["current_subflow"] = subflow_keys[
                     current_index + 1
                 ]
+            # If the current subflow is the last subflow in the list then the flow is complete
             else:
                 subtask_state["data"]["subtask_completed"] = True
                 logging.info("All subflows complete")
+
+        # Return the result of the subflow
         return flow_result
+
+    def is_complete(self, conversation_id: str) -> bool:
+
+        # Access subtask_data in conversation_state
+        subtask_state = get_subtask_state(conversation_id, self.flow_name)
+
+        # define the condition for the flow to be complete
+        condition = subtask_state["data"]["subtask_completed"]
+
+        return condition
